@@ -20,7 +20,7 @@ import folium
 from folium.plugins import MousePosition
 
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 
 # Google Web Credentials
 import json
@@ -165,14 +165,28 @@ systolic_avg = round(systolic_avg)
 # Diastolic Blood Pressure:
 diastolic_avg = df['Diastolic'].mean()
 diastolic_avg = round(diastolic_avg)
-print('Diastolic Average:', diastolic_avg)
+# print('Diastolic Average:', diastolic_avg)
 
 # ================ HR ============== #
 
+# print("Heart Rate Unique Before:", df['HR'].unique().tolist())
+
+df['HR'] = df['HR'].astype(str).str.strip().replace({'': np.nan})
+df['HR'] = pd.to_numeric(df['HR'], errors='coerce')
+
+# df['HR'] = (
+#     df['HR']
+#     .astype(str)
+#     .str.strip()
+#     .replace({
+#         "": ""
+#     })
+# )
+
 # Average Heart Rate:
-hr_avg = df['HR'].mean()
+hr_avg = df['HR'].mean(skipna=True)
 hr_avg = round(hr_avg)
-print('Heart Rate Average:', hr_avg)
+# print('Heart Rate Average:', hr_avg)
 
 # ------------------------------- Race Graphs ---------------------------- #
 
@@ -375,38 +389,21 @@ gender_pie=px.pie(
 
 # ------------------------------- Age Distribution ---------------------------- #
 
-# # Fill missing values for 'Birthdate' with random dates within a specified range
-def random_date(start, end):
-    return start + timedelta(days=np.random.randint(0, (end - start).days))
-
-start_date = datetime(1950, 1, 1) # Example: start date, e.g., 1950-01-01
-end_date = datetime(2000, 12, 31)
-
-def random_date(start, end):
-    return start + timedelta(days=np.random.randint(0, (end - start).days))
-
-# # Define the date range for random dates
-start_date = datetime(1950, 1, 1)
-end_date = datetime(2000, 12, 31)
-
-# # Convert 'Individual's Date of Birth:' to datetime, coercing errors to NaT
-df['Birthdate'] = pd.to_datetime(df['Birthdate'], errors='coerce')
-
-# # Fill missing values in 'Individual's Date of Birth:' with random dates
-df['Birthdate'] = df['Birthdate'].apply(
-    lambda x: random_date(start_date, end_date) if pd.isna(x) else x
-)
-
-# # Calculate 'Client Age' by subtracting the birth year from the current year
-df['Client Age'] = pd.to_datetime('today').year - df['Birthdate'].dt.year
-
-# # Handle NaT values in 'Client Age' if necessary (e.g., fill with a default value or drop rows)
-df['Client Age'] = df['Client Age'].apply(lambda x: "N/A" if x < 0 else x)
+df['Age'] = pd.to_numeric(df['Age'], errors='coerce')
+print("Age Unique Before:", df['Age'].unique().tolist())
 
 # # Define a function to categorize ages into age groups
 def categorize_age(age):
-    if age == "N/A":
-        return "N/A"
+    # treat missing values explicitly as 'N/A'
+    if pd.isna(age):
+        return 'N/A'
+    try:
+        age = int(age)
+    except (TypeError, ValueError):
+        return 'N/A'
+
+    if age < 10:
+        return '0-9'
     elif 10 <= age <= 19:
         return '10-19'
     elif 20 <= age <= 29:
@@ -421,11 +418,14 @@ def categorize_age(age):
         return '60-69'
     elif 70 <= age <= 79:
         return '70-79'
-    else:
+    elif age >= 80:
         return '80+'
+    else:
+        return 'N/A'
 
 # # Apply the function to create the 'Age_Group' column
-df['Age_Group'] = df['Client Age'].apply(categorize_age)
+df['Age_Group'] = df['Age'].apply(categorize_age)
+# df['Age_Group'] = df['Client Age'].apply(categorize_age)
 
 # # Group by 'Age_Group' and count the number of patient visits
 df_decades = df.groupby('Age_Group',  observed=True).size().reset_index(name='Patient_Visits')
@@ -1281,6 +1281,18 @@ df['ZIP Code'] = df['ZIP Code'].fillna(mode_value)
 
 # ========================== DataFrame Table ========================== #
 
+df = df.sort_values('Date of Activity', ascending=True)
+
+# create a display index column and prepare table data/columns
+# reset index to ensure contiguous numbering after any filtering/sorting upstream
+df_indexed = df.reset_index(drop=True).copy()
+# Insert '#' as the first column (1-based row numbers)
+df_indexed.insert(0, '#', df_indexed.index + 1)
+
+# Convert to records for DataTable
+data = df_indexed.to_dict('records')
+columns = [{"name": col, "id": col} for col in df_indexed.columns]
+
 df_table = go.Figure(data=[go.Table(
     columnwidth=[200] * len(df.columns),   # give each column 200px width
     header=dict(
@@ -1356,7 +1368,7 @@ app.layout = html.Div(
         className='rollup-row',
         children=[
             html.Div(
-                className='rollup-box-l',
+                className='rollup-box-tl',
                 children=[
                     html.Div(
                         className='title-box',
@@ -1385,7 +1397,7 @@ app.layout = html.Div(
                 ]
             ),
             html.Div(
-                className='rollup-box-r',
+                className='rollup-box-tr',
                 children=[
                     html.Div(
                         className='title-box',
@@ -1419,7 +1431,7 @@ app.layout = html.Div(
         className='rollup-row',
         children=[
             html.Div(
-                className='rollup-box-l',
+                className='rollup-box-bl',
                 children=[
                     html.Div(
                         className='title-box',
@@ -1448,7 +1460,7 @@ app.layout = html.Div(
                 ]
             ),
             html.Div(
-                className='rollup-box-r',
+                className='rollup-box-br',
                 children=[
                     html.Div(
                         className='title-box',
@@ -1463,7 +1475,7 @@ app.layout = html.Div(
                         className='circle-box',
                         children=[
                             html.Div(
-                                className='circle-1',
+                                className='circle-4',
                                 children=[
                                     html.H1(
                                     className='rollup-number',
@@ -1730,19 +1742,49 @@ html.Div(
         className='data-box',
         children=[
             html.H1(
-                className='table-title-text',
-                children='Findhelp Table'
+                className='data-title',
+                children='Movement is Medicine Table'
             ),
-            html.Div(  
-                className='table-scroll',
-                children=[
-                    dcc.Graph(
-                        className='data',
-                        figure=df_table,
-                        config={'responsive': True}
-                    )
+            dash_table.DataTable(
+                id='applications-table',
+                data=data,
+                columns=columns,
+                page_size=10,
+                sort_action='native',
+                filter_action='native',
+                row_selectable='multi',
+                style_table={
+                    'overflowX': 'auto',
+                    # 'border': '3px solid #000',
+                    # 'borderRadius': '0px'
+                },
+                style_cell={
+                    'textAlign': 'left',
+                    'minWidth': '100px', 
+                    'whiteSpace': 'normal'
+                },
+                style_header={
+                    'textAlign': 'center', 
+                    'fontWeight': 'bold',
+                    'backgroundColor': '#34A853', 
+                    'color': 'white'
+                },
+                style_data={
+                    'whiteSpace': 'normal',
+                    'height': 'auto',
+                },
+                style_cell_conditional=[
+                    # make the index column narrow and centered
+                    {'if': {'column_id': '#'},
+                    'width': '20px', 'minWidth': '60px', 'maxWidth': '60px', 'textAlign': 'center'},
+                    {'if': {'column_id': 'Timestamp'},
+                    'width': '50px', 'minWidth': '100px', 'maxWidth': '200px', 'textAlign': 'center'},
+                    {'if': {'column_id': 'Date of Activity'},
+                    'width': '50px', 'minWidth': '100px', 'maxWidth': '200px', 'textAlign': 'center'},
+                    {'if': {'column_id': 'Interest'},
+                    'width': '200px', 'minWidth': '200px', 'maxWidth': '200px', 'textAlign': 'center'},
                 ]
-            )
+            ),
         ]
     ),
 ])
