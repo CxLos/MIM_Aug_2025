@@ -1496,9 +1496,15 @@ html.Div(
     className='graph-container',
     children=[
         
+        html.H1(
+            className='visuals-text',
+            children='Visuals'
+        ),
+        
         html.Div(
             className='graph-row',
             children=[
+                
                 html.Div(
                     className='graph-box',
                     children=[
@@ -1735,8 +1741,9 @@ html.Div(
             ),
         ]
     ),
+]),
 
-# ============================ Data Table ========================== #
+    # ============================ Data Table ========================== #
 
     html.Div(
         className='data-box',
@@ -1787,7 +1794,6 @@ html.Div(
             ),
         ]
     ),
-])
 ])
 
 print(f"Serving Flask app '{current_file}'! 🚀")
